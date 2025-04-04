@@ -37,24 +37,25 @@ func renameDirectories(cfg Config) error {
 	if cfg.StartFrom > 0 {
 		// Count how many folders we need to renumber
 		folderCount := 0
-		err := filepath.Walk(cfg.Dir, func(path string, info os.FileInfo, err error) error {
-			if err != nil || !info.IsDir() || path == cfg.Dir {
-				return nil
+		entries, err := os.ReadDir(cfg.Dir)
+		if err != nil {
+			return fmt.Errorf("error reading directory: %v", err)
+		}
+
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
 			}
-			baseName := filepath.Base(path)
+			baseName := entry.Name()
 			parts := strings.SplitN(baseName, " ", 2)
 			if len(parts) != 2 {
-				return nil
+				continue
 			}
 			numberParts := strings.Split(parts[0], ".")
 			if len(numberParts) != 2 || numberParts[0] != cfg.OldPrefix {
-				return nil
+				continue
 			}
 			folderCount++
-			return nil
-		})
-		if err != nil {
-			return fmt.Errorf("error counting folders: %v", err)
 		}
 
 		// Check if the last number would exceed the maximum
@@ -67,40 +68,33 @@ func renameDirectories(cfg Config) error {
 
 	// Collect all matching folders first
 	var folders []folder
-	err := filepath.Walk(cfg.Dir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	entries, err := os.ReadDir(cfg.Dir)
+	if err != nil {
+		return fmt.Errorf("error reading directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
 		}
 
-		if !info.IsDir() {
-			return nil
-		}
-
-		// Skip the root directory
-		if path == cfg.Dir {
-			return nil
-		}
-
-		baseName := filepath.Base(path)
+		baseName := entry.Name()
 		parts := strings.SplitN(baseName, " ", 2)
 		if len(parts) == 2 {
 			numberParts := strings.Split(parts[0], ".")
 			if len(numberParts) == 2 && numberParts[0] == cfg.OldPrefix {
 				decimal, err := strconv.Atoi(numberParts[1])
 				if err != nil {
-					return nil
+					continue
 				}
 
+				path := filepath.Join(cfg.Dir, baseName)
 				folders = append(folders, folder{path: path, decimal: decimal, restName: parts[1]})
 			}
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		return fmt.Errorf("error walking directory: %v", err)
 	}
+
+
 
 	// Sort folders by their current decimal number
 	sort.Slice(folders, func(i, j int) bool {
